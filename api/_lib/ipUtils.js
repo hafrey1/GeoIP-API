@@ -33,7 +33,177 @@ function validateIP(ip) {
 }
 
 /**
- * 批量IP地址验证
+ * 域名格式验证
+ * 支持标准域名格式，包括国际化域名
+ * @param {string} domain - 待验证的域名字符串
+ * @returns {boolean} - 验证结果
+ */
+function validateDomain(domain) {
+  if (typeof domain !== 'string' || domain.length === 0) {
+    return false;
+  }
+  
+  // 基本长度检查
+  if (domain.length > 253) {
+    return false;
+  }
+  
+  // 域名正则表达式 - 支持国际化域名和常见TLD
+  const domainRegex = /^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)*[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$/;
+  
+  // 先检查基本格式
+  if (!domainRegex.test(domain)) {
+    return false;
+  }
+  
+  // 检查是否包含有效的TLD
+  const parts = domain.split('.');
+  if (parts.length < 2) {
+    return false;
+  }
+  
+  // 最后一部分应该是有效的TLD
+  const tld = parts[parts.length - 1];
+  if (tld.length < 2 || !/^[a-zA-Z]{2,}$/.test(tld)) {
+    return false;
+  }
+  
+  // 排除以点开头或结尾的域名
+  if (domain.startsWith('.') || domain.endsWith('.')) {
+    return false;
+  }
+  
+  // 排除连续的点
+  if (domain.includes('..')) {
+    return false;
+  }
+  
+  return true;
+}
+
+/**
+ * 判断输入是IP还是域名
+ * @param {string} input - 输入字符串
+ * @returns {Object} - {type: 'ip'|'domain'|'unknown', value: string}
+ */
+function identifyInput(input) {
+  if (typeof input !== 'string') {
+    return { type: 'unknown', value: input };
+  }
+  
+  const trimmedInput = input.trim();
+  
+  if (validateIP(trimmedInput)) {
+    return { type: 'ip', value: trimmedInput };
+  }
+  
+  if (validateDomain(trimmedInput)) {
+    return { type: 'domain', value: trimmedInput };
+  }
+  
+  return { type: 'unknown', value: trimmedInput };
+}
+
+/**
+ * DNS解析域名为IP地址
+ * @param {string} domain - 域名
+ * @returns {Promise<string>} - 解析后的IP地址
+ */
+async function resolveDomainToIP(domain) {
+  const dns = require('dns').promises;
+  
+  try {
+    // 解析A记录获取IPv4地址
+    const addresses = await dns.resolve4(domain);
+    
+    if (addresses && addresses.length > 0) {
+      // 返回第一个有效的IPv4地址
+      return addresses[0];
+    }
+    
+    throw new Error('No IPv4 address found');
+  } catch (error) {
+    // 如果dns模块不可用，尝试使用fetch方法
+    try {
+      const response = await fetch(`https://dns.google/resolve?name=${domain}&type=A`);
+      const data = await response.json();
+      
+      if (data.Answer && data.Answer.length > 0) {
+        // 寻找A记录
+        const aRecord = data.Answer.find(record => record.type === 1);
+        if (aRecord && aRecord.data) {
+          return aRecord.data;
+        }
+      }
+      
+      throw new Error('No A record found via DNS over HTTPS');
+    } catch (fetchError) {
+      throw new Error(`DNS resolution failed: ${error.message} | Fallback failed: ${fetchError.message}`);
+    }
+  }
+}
+
+/**
+ * 批量域名/IP地址验证和分类
+ * @param {Array<string>} inputs - 输入数组（IP地址或域名）
+ * @returns {Object} - 包含分类结果的对象
+ */
+function validateInputs(inputs) {
+  const results = {
+    ips: [],
+    domains: [],
+    invalid: [],
+    duplicates: [],
+    stats: {
+      total: inputs.length,
+      ipCount: 0,
+      domainCount: 0,
+      invalidCount: 0,
+      duplicateCount: 0
+    }
+  };
+  
+  const seen = new Set();
+  
+  inputs.forEach((input, index) => {
+    const normalizedInput = typeof input === 'string' ? input.trim() : input;
+    
+    // 检查重复
+    if (seen.has(normalizedInput)) {
+      results.duplicates.push({ input: normalizedInput, index });
+      results.stats.duplicateCount++;
+      return;
+    }
+    seen.add(normalizedInput);
+    
+    // 识别输入类型
+    const identified = identifyInput(normalizedInput);
+    
+    switch (identified.type) {
+      case 'ip':
+        results.ips.push(identified.value);
+        results.stats.ipCount++;
+        break;
+      case 'domain':
+        results.domains.push(identified.value);
+        results.stats.domainCount++;
+        break;
+      default:
+        results.invalid.push({ 
+          input: normalizedInput, 
+          index, 
+          reason: 'Invalid IP address or domain name format' 
+        });
+        results.stats.invalidCount++;
+        break;
+    }
+  });
+  
+  return results;
+}
+
+/**
+ * 批量IP地址验证（保持向后兼容）
  * @param {Array<string>} ips - IP地址数组
  * @returns {Object} - 包含有效和无效IP的分类结果
  */
@@ -196,106 +366,18 @@ function isPrivateIP(ip) {
   return false;
 }
 
-/**
- * 获取IP地址的类型信息
- * @param {string} ip - IP地址
- * @returns {Object} - IP类型信息
- */
-function getIPInfo(ip) {
-  if (!validateIP(ip)) {
-    return {
-      valid: false,
-      type: 'invalid',
-      class: null,
-      private: false
-    };
-  }
-  
-  const octets = ip.split('.').map(Number);
-  const firstOctet = octets[0];
-  
-  let ipClass = 'Unknown';
-  if (firstOctet <= 127) {
-    ipClass = 'A';
-  } else if (firstOctet <= 191) {
-    ipClass = 'B';
-  } else if (firstOctet <= 223) {
-    ipClass = 'C';
-  } else if (firstOctet <= 239) {
-    ipClass = 'D';
-  } else {
-    ipClass = 'E';
-  }
-  
-  return {
-    valid: true,
-    type: 'ipv4',
-    class: ipClass,
-    private: isPrivateIP(ip),
-    octets: octets,
-    decimal: ipToNumber(ip)
-  };
-}
-
-/**
- * 格式化IP统计信息
- * @param {Array<string>} ips - IP地址数组
- * @returns {Object} - 统计信息
- */
-function getIPStats(ips) {
-  const stats = {
-    total: ips.length,
-    valid: 0,
-    invalid: 0,
-    private: 0,
-    public: 0,
-    classes: { A: 0, B: 0, C: 0, D: 0, E: 0 },
-    uniqueIPs: 0,
-    duplicates: 0
-  };
-  
-  const uniqueIPs = new Set();
-  
-  ips.forEach(ip => {
-    const info = getIPInfo(ip);
-    
-    if (info.valid) {
-      stats.valid++;
-      
-      if (info.private) {
-        stats.private++;
-      } else {
-        stats.public++;
-      }
-      
-      if (info.class && stats.classes[info.class] !== undefined) {
-        stats.classes[info.class]++;
-      }
-    } else {
-      stats.invalid++;
-    }
-    
-    if (uniqueIPs.has(ip)) {
-      stats.duplicates++;
-    } else {
-      uniqueIPs.add(ip);
-    }
-  });
-  
-  stats.uniqueIPs = uniqueIPs.size;
-  
-  return stats;
-}
-
+// 导出所有函数
 module.exports = {
   validateIP,
+  validateDomain,
+  identifyInput,
+  resolveDomainToIP,
+  validateInputs,
   validateIPs,
   ipToNumber,
   numberToIP,
   isIPInRange,
   chunkArray,
   generateRandomIPs,
-  isPrivateIP,
-  getIPInfo,
-  getIPStats
+  isPrivateIP
 };
