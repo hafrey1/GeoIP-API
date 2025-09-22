@@ -1,27 +1,40 @@
 {
-  "name": "geoip-api",
-  "version": "1.0.0",
-  "description": "GeoIP API service using IP2Location LITE DB1 data",
-  "main": "src/index.js",
+  "name": "geoip-api-vercel",
+  "version": "2.0.0",
+  "description": "High-performance GeoIP API service optimized for Vercel Serverless Functions",
+  "main": "api/index.js",
   "engines": {
     "node": ">=18.0.0"
   },
   "scripts": {
-    "start": "node src/index.js",
-    "dev": "node src/index.js",
-    "build": "echo 'No build step required'",
-    "test": "echo 'No tests specified'"
+    "dev": "vercel dev",
+    "build": "node scripts/build-index.js",
+    "deploy": "npm run build && vercel --prod",
+    "deploy:preview": "npm run build && vercel",
+    "test": "node test/api-test.js",
+    "clean": "rm -f data/ip-ranges.json"
   },
   "dependencies": {
-    "express": "^4.18.2",
-    "sqlite3": "^5.1.6",
-    "csv-parser": "^3.0.0",
-    "cors": "^2.8.5",
-    "helmet": "^7.0.0",
-    "morgan": "^1.10.0",
-    "compression": "^1.7.4"
+    "csv-parser": "^3.0.0"
   },
-  "keywords": ["geoip", "ip2location", "api", "geolocation", "railway"],
-  "author": "hafrey",
-  "license": "MIT"
+  "devDependencies": {
+    "vercel": "latest"
+  },
+  "keywords": [
+    "geoip",
+    "ip2location",
+    "api",
+    "geolocation",
+    "vercel",
+    "serverless",
+    "ip-lookup",
+    "batch-processing"
+  ],
+  "author": "hafrey <hafreyli@gmail.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hafrey/geoip-api-vercel.git"
+  },
+  "homepage": "https://github.com/hafrey/geoip-api-vercel#readme"
 }
