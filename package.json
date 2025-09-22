@@ -1,0 +1,27 @@
+{
+  "name": "geoip-api",
+  "version": "1.0.0",
+  "description": "GeoIP API service using IP2Location LITE DB1 data",
+  "main": "src/index.js",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node src/index.js",
+    "build": "echo 'No build step required'",
+    "test": "echo 'No tests specified'"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "sqlite3": "^5.1.6",
+    "csv-parser": "^3.0.0",
+    "cors": "^2.8.5",
+    "helmet": "^7.0.0",
+    "morgan": "^1.10.0",
+    "compression": "^1.7.4"
+  },
+  "keywords": ["geoip", "ip2location", "api", "geolocation", "railway"],
+  "author": "hafrey",
+  "license": "MIT"
+}
