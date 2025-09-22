@@ -84,10 +84,10 @@ module.exports = trackPerformance('index', async (req, res) => {
     },
     
     links: {
-      documentation: 'https://github.com/hafrey/geoip-api-vercel',
+      documentation: 'https://github.com/hafrey1/GeoIP-API/blob/main/README.md',
       health_check: '/api/health',
       example_single: '/api/lookup?ip=8.8.8.8',
-      source_code: 'https://github.com/hafrey/geoip-api-vercel'
+      source_code: 'https://github.com/hafrey1/GeoIP-API'
     },
     
     timestamp: new Date().toISOString(),
