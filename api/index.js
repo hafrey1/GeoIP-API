@@ -2,7 +2,7 @@ const { trackPerformance } = require('./_lib/monitor');
 
 module.exports = trackPerformance('index', async (req, res) => {
   // 设置响应头
-  res.setHeader('Content-Type', 'application/json');
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
   res.setHeader('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=86400');
   
   const apiInfo = {
@@ -32,7 +32,11 @@ module.exports = trackPerformance('index', async (req, res) => {
         description: 'Query geolocation for multiple IP addresses (max 500)',
         content_type: 'application/json',
         body: {
-          ips: ['8.8.8.8', '1.1.1.1', '114.114.114.114']
+          ips: [
+            '8.8.8.8',
+            '1.1.1.1', 
+            '114.114.114.114'
+          ]
         }
       }
     },
@@ -90,5 +94,8 @@ module.exports = trackPerformance('index', async (req, res) => {
     uptime: process.uptime()
   };
   
-  res.status(200).json(apiInfo);
+  // 🎯 关键修改：使用格式化的JSON输出，缩进2个空格
+  const formattedJson = JSON.stringify(apiInfo, null, 2);
+  
+  res.status(200).end(formattedJson);
 });
