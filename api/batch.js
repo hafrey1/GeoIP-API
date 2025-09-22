@@ -1,5 +1,5 @@
 const { queryIPs } = require('./_lib/database');
-const { validateIP, chunkArray } = require('./_lib/ipUtils');
+const { validateInputs, resolveDomainToIP, chunkArray } = require('./_lib/ipUtils');
 const { trackPerformance } = require('./_lib/monitor');
 
 // 批量查询配置
@@ -7,7 +7,9 @@ const BATCH_CONFIG = {
   MAX_BATCH_SIZE: 500,
   CHUNK_SIZE: 50, // 分批处理大小
   MAX_CONCURRENT_CHUNKS: 10, // 最大并发批次
-  TIMEOUT_MS: 25000 // 25秒超时
+  TIMEOUT_MS: 25000, // 25秒超时
+  DNS_TIMEOUT_MS: 5000, // DNS解析5秒超时
+  MAX_DOMAIN_RESOLUTION: 100 // 单次最多解析100个域名
 };
 
 module.exports = trackPerformance('batch', async (req, res) => {
@@ -34,292 +36,427 @@ module.exports = trackPerformance('batch', async (req, res) => {
         method: 'POST',
         url: '/api/batch',
         content_type: 'application/json',
-        body: {
-          ips: [
-            '8.8.8.8',
-            '1.1.1.1',
-            '114.114.114.114'
-          ]
+        body_examples: {
+          mixed_query: {
+            inputs: [
+              '8.8.8.8',
+              'google.com',
+              '1.1.1.1',
+              'cloudflare.com',
+              '114.114.114.114',
+              'baidu.com'
+            ]
+          },
+          ip_only: {
+            ips: [
+              '8.8.8.8',
+              '1.1.1.1',
+              '114.114.114.114'
+            ]
+          }
         },
-        example: 'curl -X POST "284" -H "Content-Type: application/json" -d \'{"ips":["8.8.8.8","1.1.1.1"]}\''
+        curl_example: 'curl -X POST "35" -H "Content-Type: application/json" -d \'{"inputs":["8.8.8.8","google.com","1.1.1.1"]}\''
       },
       timestamp: new Date().toISOString()
     };
     
-    // 🎯 格式化JSON输出
     const formattedJson = JSON.stringify(errorResponse, null, 2);
     return res.status(405).end(formattedJson);
   }
 
   const startTime = Date.now();
-  const requestId = `batch_${Date.now()}${Math.random().toString(36).substr(2, 9)}`;
+  const requestId = `batch_${startTime}`;
   
+  console.log(`[${requestId}] 开始处理批量查询请求`);
+
   try {
     // 解析请求体
     let requestBody;
     try {
-      // Vercel会自动解析JSON，但我们需要处理可能的异常
-      requestBody = req.body;
-      if (!requestBody) {
-        throw new Error('Empty request body');
-      }
+      const bodyStr = JSON.stringify(req.body);
+      requestBody = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
     } catch (parseError) {
       const errorResponse = {
         success: false,
         error: 'Invalid JSON format',
-        message: '请提供有效的JSON格式请求体',
+        message: '请求体必须是有效的JSON格式',
         request_id: requestId,
-        expected_format: {
-          ips: [
-            '8.8.8.8',
-            '1.1.1.1',
-            '114.114.114.114'
-          ]
-        },
-        parse_error: parseError.message,
-        stats: {
-          response_time_ms: Date.now() - startTime,
-          error_occurred: true
-        }
-      };
-      
-      // 🎯 格式化JSON输出
-      const formattedJson = JSON.stringify(errorResponse, null, 2);
-      return res.status(400).end(formattedJson);
-    }
-    
-    // 验证请求体结构
-    if (!requestBody || !requestBody.ips) {
-      const errorResponse = {
-        success: false,
-        error: 'Missing ips array',
-        message: '请求体中必须包含ips数组',
-        request_id: requestId,
-        received: requestBody,
-        expected_format: {
-          ips: [
-            '8.8.8.8',
-            '1.1.1.1',
-            '114.114.114.114'
-          ]
-        },
-        stats: {
-          response_time_ms: Date.now() - startTime,
-          error_occurred: true
-        }
-      };
-      
-      // 🎯 格式化JSON输出
-      const formattedJson = JSON.stringify(errorResponse, null, 2);
-      return res.status(400).end(formattedJson);
-    }
-    
-    const { ips } = requestBody;
-    
-    // 验证ips是数组
-    if (!Array.isArray(ips)) {
-      const errorResponse = {
-        success: false,
-        error: 'Invalid ips format',
-        message: 'ips必须是数组格式',
-        request_id: requestId,
-        received_type: typeof ips,
-        expected_type: 'array',
         example: {
-          ips: ['8.8.8.8', '1.1.1.1']
+          inputs: ['8.8.8.8', 'google.com', '1.1.1.1']
         },
         stats: {
           response_time_ms: Date.now() - startTime,
           error_occurred: true
-        }
+        },
+        timestamp: new Date().toISOString()
       };
       
-      // 🎯 格式化JSON输出
       const formattedJson = JSON.stringify(errorResponse, null, 2);
       return res.status(400).end(formattedJson);
     }
+
+    // 兼容旧版本的ips参数和新版本的inputs参数
+    const inputArray = requestBody.inputs || requestBody.ips || [];
     
-    // 验证批量大小
-    if (ips.length === 0) {
+    if (!Array.isArray(inputArray)) {
       const errorResponse = {
         success: false,
-        error: 'Empty IP array',
-        message: 'IP数组不能为空',
+        error: 'Invalid input format',
+        message: 'inputs 必须是数组格式',
         request_id: requestId,
-        min_ips: 1,
-        max_ips: BATCH_CONFIG.MAX_BATCH_SIZE,
+        received_type: typeof inputArray,
+        example: {
+          inputs: ['8.8.8.8', 'google.com', '1.1.1.1']
+        },
         stats: {
           response_time_ms: Date.now() - startTime,
           error_occurred: true
-        }
+        },
+        timestamp: new Date().toISOString()
       };
       
-      // 🎯 格式化JSON输出
       const formattedJson = JSON.stringify(errorResponse, null, 2);
       return res.status(400).end(formattedJson);
     }
-    
-    if (ips.length > BATCH_CONFIG.MAX_BATCH_SIZE) {
+
+    if (inputArray.length === 0) {
       const errorResponse = {
         success: false,
-        error: 'Batch size too large',
-        message: `单次批量查询最多支持${BATCH_CONFIG.MAX_BATCH_SIZE}个IP地址`,
+        error: 'Empty input array',
+        message: '输入数组不能为空',
         request_id: requestId,
-        received_count: ips.length,
-        max_allowed: BATCH_CONFIG.MAX_BATCH_SIZE,
-        suggestion: `请将IP地址分成${Math.ceil(ips.length / BATCH_CONFIG.MAX_BATCH_SIZE)}个批次查询`,
+        example: {
+          inputs: ['8.8.8.8', 'google.com', '1.1.1.1']
+        },
         stats: {
           response_time_ms: Date.now() - startTime,
           error_occurred: true
-        }
+        },
+        timestamp: new Date().toISOString()
       };
       
-      // 🎯 格式化JSON输出
       const formattedJson = JSON.stringify(errorResponse, null, 2);
       return res.status(400).end(formattedJson);
     }
-    
-    // 验证和清理IP地址
-    let validIPs = [];
-    let invalidIPs = [];
-    let duplicateIPs = [];
-    const seenIPs = new Set();
-    
+
+    if (inputArray.length > BATCH_CONFIG.MAX_BATCH_SIZE) {
+      const errorResponse = {
+        success: false,
+        error: 'Batch size limit exceeded',
+        message: `批量查询最多支持 ${BATCH_CONFIG.MAX_BATCH_SIZE} 个输入，当前: ${inputArray.length}`,
+        request_id: requestId,
+        limits: {
+          max_batch_size: BATCH_CONFIG.MAX_BATCH_SIZE,
+          current_size: inputArray.length
+        },
+        suggestion: `请将查询分成多个较小的批次进行`,
+        stats: {
+          response_time_ms: Date.now() - startTime,
+          error_occurred: true
+        },
+        timestamp: new Date().toISOString()
+      };
+      
+      const formattedJson = JSON.stringify(errorResponse, null, 2);
+      return res.status(400).end(formattedJson);
+    }
+
+    // 验证和分类输入
     const validationStartTime = Date.now();
-    
-    ips.forEach((ip, index) => {
-      // 类型检查
-      if (typeof ip !== 'string') {
-        invalidIPs.push({
-          index,
-          value: ip,
-          reason: `Expected string, got ${typeof ip}`
-        });
-        return;
-      }
-      
-      // 去除空白符
-      const cleanIP = ip.trim();
-      
-      // 检查重复
-      if (seenIPs.has(cleanIP)) {
-        duplicateIPs.push({
-          index,
-          ip: cleanIP,
-          first_seen: Array.from(seenIPs.keys()).indexOf(cleanIP)
-        });
-        return;
-      }
-      
-      // 验证IP格式
-      if (!validateIP(cleanIP)) {
-        invalidIPs.push({
-          index,
-          value: cleanIP,
-          reason: 'Invalid IPv4 format'
-        });
-        return;
-      }
-      
-      seenIPs.add(cleanIP);
-      validIPs.push(cleanIP);
-    });
-    
+    const validation = validateInputs(inputArray);
     const validationTime = Date.now() - validationStartTime;
     
-    // 如果没有有效的IP
-    if (validIPs.length === 0) {
+    console.log(`[${requestId}] 输入验证完成 - IP数量: ${validation.stats.ipCount}, 域名数量: ${validation.stats.domainCount}, 无效数量: ${validation.stats.invalidCount}, 重复数量: ${validation.stats.duplicateCount}`);
+
+    // 检查域名数量限制
+    if (validation.domains.length > BATCH_CONFIG.MAX_DOMAIN_RESOLUTION) {
       const errorResponse = {
         success: false,
-        error: 'No valid IP addresses',
-        message: '请求中没有找到有效的IP地址',
+        error: 'Domain resolution limit exceeded',
+        message: `单次批量查询最多支持解析 ${BATCH_CONFIG.MAX_DOMAIN_RESOLUTION} 个域名，当前域名数量: ${validation.domains.length}`,
         request_id: requestId,
+        limits: {
+          max_domains: BATCH_CONFIG.MAX_DOMAIN_RESOLUTION,
+          current_domains: validation.domains.length
+        },
         validation_results: {
-          total_submitted: ips.length,
-          valid_count: validIPs.length,
-          invalid_count: invalidIPs.length,
-          duplicate_count: duplicateIPs.length,
-          invalid_ips: invalidIPs,
-          duplicate_ips: duplicateIPs
+          total_inputs: validation.stats.total,
+          ips: validation.stats.ipCount,
+          domains: validation.stats.domainCount,
+          invalid: validation.stats.invalidCount
         },
         stats: {
-          validation_time_ms: validationTime,
           response_time_ms: Date.now() - startTime,
           error_occurred: true
-        }
+        },
+        timestamp: new Date().toISOString()
       };
       
-      // 🎯 格式化JSON输出
       const formattedJson = JSON.stringify(errorResponse, null, 2);
       return res.status(400).end(formattedJson);
     }
+
+    // DNS解析所有域名
+    let resolvedIPs = [...validation.ips]; // 直接复制已有的IP
+    let dnsResolutions = {};
+    let dnsErrors = {};
+    let dnsResolutionTime = 0;
     
-    console.log(`Batch lookup started: ${validIPs.length} IPs (Request: ${requestId})`);
+    if (validation.domains.length > 0) {
+      console.log(`[${requestId}] 开始解析 ${validation.domains.length} 个域名`);
+      const dnsStartTime = Date.now();
+      
+      // 并行解析所有域名
+      const dnsPromises = validation.domains.map(async (domain) => {
+        try {
+          const resolvedIP = await Promise.race([
+            resolveDomainToIP(domain),
+            new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('DNS timeout')), BATCH_CONFIG.DNS_TIMEOUT_MS)
+            )
+          ]);
+          
+          dnsResolutions[domain] = resolvedIP;
+          resolvedIPs.push(resolvedIP);
+          return { domain, ip: resolvedIP, success: true };
+        } catch (error) {
+          dnsErrors[domain] = error.message;
+          return { domain, error: error.message, success: false };
+        }
+      });
+      
+      const dnsResults = await Promise.allSettled(dnsPromises);
+      dnsResolutionTime = Date.now() - dnsStartTime;
+      
+      const successfulResolutions = dnsResults.filter(result => 
+        result.status === 'fulfilled' && result.value.success
+      ).length;
+      
+      console.log(`[${requestId}] DNS解析完成 - 成功: ${successfulResolutions}, 失败: ${validation.domains.length - successfulResolutions}, 耗时: ${dnsResolutionTime}ms`);
+    }
+
+    // 如果没有任何有效的IP，返回错误
+    if (resolvedIPs.length === 0) {
+      const errorResponse = {
+        success: false,
+        error: 'No valid inputs to process',
+        message: '没有有效的IP地址或可解析的域名',
+        request_id: requestId,
+        validation_results: {
+          total_inputs: validation.stats.total,
+          valid_ips: validation.stats.ipCount,
+          valid_domains: validation.stats.domainCount,
+          dns_failures: Object.keys(dnsErrors).length,
+          invalid_inputs: validation.stats.invalidCount
+        },
+        dns_errors: dnsErrors,
+        invalid_inputs: validation.invalid,
+        stats: {
+          response_time_ms: Date.now() - startTime,
+          validation_time_ms: validationTime,
+          dns_resolution_time_ms: dnsResolutionTime,
+          error_occurred: true
+        },
+        timestamp: new Date().toISOString()
+      };
+      
+      const formattedJson = JSON.stringify(errorResponse, null, 2);
+      return res.status(400).end(formattedJson);
+    }
+
+    // 去重IP地址
+    const uniqueIPs = [...new Set(resolvedIPs)];
+    console.log(`[${requestId}] 去重后待查询IP数量: ${uniqueIPs.length}`);
+
+    // 分批并行查询IP地理位置
+    const processingStartTime = Date.now();
+    const chunks = chunkArray(uniqueIPs, BATCH_CONFIG.CHUNK_SIZE);
+    const results = {};
     
-    // 执行批量查询
-    const queryStartTime = Date.now();
-    const results = await queryIPs(validIPs);
-    const queryTime = Date.now() - queryStartTime;
+    console.log(`[${requestId}] 开始分批查询 - 共 ${chunks.length} 个批次`);
+
+    // 限制并发批次数量
+    const semaphore = {
+      current: 0,
+      max: BATCH_CONFIG.MAX_CONCURRENT_CHUNKS
+    };
+
+    const processChunk = async (chunk, chunkIndex) => {
+      // 等待信号量
+      while (semaphore.current >= semaphore.max) {
+        await new Promise(resolve => setTimeout(resolve, 10));
+      }
+      
+      semaphore.current++;
+      
+      try {
+        console.log(`[${requestId}] 处理批次 ${chunkIndex + 1}/${chunks.length} - ${chunk.length} 个IP`);
+        const chunkResults = await queryIPs(chunk);
+        
+        // 合并结果
+        Object.assign(results, chunkResults);
+        
+        return chunkResults;
+      } finally {
+        semaphore.current--;
+      }
+    };
+
+    // 并行处理所有批次
+    const chunkPromises = chunks.map(processChunk);
+    await Promise.all(chunkPromises);
+    
+    const processingTime = Date.now() - processingStartTime;
+    console.log(`[${requestId}] 批量查询完成 - 耗时: ${processingTime}ms`);
+
+    // 构建响应数据，包含原始输入的映射
+    const responseData = {};
+    const stats = {
+      total: validation.stats.total,
+      valid_ips: validation.stats.ipCount,
+      valid_domains: validation.stats.domainCount,
+      resolved_domains: Object.keys(dnsResolutions).length,
+      dns_failures: Object.keys(dnsErrors).length,
+      invalid: validation.stats.invalidCount,
+      duplicates: validation.stats.duplicateCount,
+      processed: 0,
+      found: 0
+    };
+
+    // 处理IP输入
+    validation.ips.forEach(ip => {
+      const result = results[ip];
+      if (result) {
+        responseData[ip] = {
+          input: ip,
+          input_type: 'ip',
+          ip: result.ip,
+          country_code: result.country_code,
+          country_name: result.country_name
+        };
+        stats.processed++;
+        stats.found++;
+      } else {
+        responseData[ip] = {
+          input: ip,
+          input_type: 'ip',
+          ip: ip,
+          country_code: null,
+          country_name: null,
+          error: 'IP not found in database'
+        };
+        stats.processed++;
+      }
+    });
+
+    // 处理域名输入
+    validation.domains.forEach(domain => {
+      if (dnsResolutions[domain]) {
+        const resolvedIP = dnsResolutions[domain];
+        const result = results[resolvedIP];
+        
+        if (result) {
+          responseData[domain] = {
+            input: domain,
+            input_type: 'domain',
+            resolved_ip: resolvedIP,
+            ip: result.ip,
+            country_code: result.country_code,
+            country_name: result.country_name
+          };
+          stats.found++;
+        } else {
+          responseData[domain] = {
+            input: domain,
+            input_type: 'domain',
+            resolved_ip: resolvedIP,
+            ip: resolvedIP,
+            country_code: null,
+            country_name: null,
+            error: 'Resolved IP not found in database'
+          };
+        }
+        stats.processed++;
+      } else {
+        responseData[domain] = {
+          input: domain,
+          input_type: 'domain',
+          resolved_ip: null,
+          error: dnsErrors[domain] || 'DNS resolution failed'
+        };
+      }
+    });
+
+    // 生成性能建议
     const totalTime = Date.now() - startTime;
+    const suggestions = [];
     
-    // 构建成功响应
-    const successResponse = {
+    if (totalTime > 10000) {
+      suggestions.push('查询时间较长，建议减少批量大小或分多次查询');
+    }
+    if (validation.stats.domainCount > 50) {
+      suggestions.push('域名数量较多，DNS解析可能影响性能，建议预先解析域名');
+    }
+    if (validation.stats.duplicateCount > 0) {
+      suggestions.push('输入中包含重复项，建议去重后再查询');
+    }
+    if (validation.stats.invalidCount > 0) {
+      suggestions.push('输入中包含无效格式，请检查IP地址和域名格式');
+    }
+
+    const finalResponse = {
       success: true,
-      data: results,
+      data: responseData,
       stats: {
-        total: ips.length,
-        valid: validIPs.length,
-        invalid: invalidIPs.length,
-        duplicates: duplicateIPs.length,
-        processed: validIPs.length,
-        response_time_ms: totalTime
-      },
-      performance: {
+        ...stats,
+        unique_ips_processed: uniqueIPs.length,
+        response_time_ms: totalTime,
         validation_time_ms: validationTime,
-        query_time_ms: queryTime,
-        average_per_ip_ms: Math.round(queryTime / validIPs.length * 100) / 100,
-        throughput_ips_per_second: Math.round(validIPs.length / (queryTime / 1000))
+        dns_resolution_time_ms: dnsResolutionTime,
+        geo_query_time_ms: processingTime,
+        avg_time_per_input: Math.round(totalTime / validation.stats.total),
+        throughput_per_second: Math.round(validation.stats.total / (totalTime / 1000))
       },
-      validation_details: invalidIPs.length > 0 || duplicateIPs.length > 0 ? {
-        invalid_ips: invalidIPs.slice(0, 10), // 只显示前10个
-        duplicate_ips: duplicateIPs.slice(0, 10) // 只显示前10个
-      } : undefined,
-      warnings: [
-        ...(invalidIPs.length > 0 ? [`${invalidIPs.length} invalid IP addresses were skipped`] : []),
-        ...(duplicateIPs.length > 0 ? [`${duplicateIPs.length} duplicate IP addresses were removed`] : []),
-        ...(totalTime > 10000 ? ['Query took longer than 10 seconds - consider reducing batch size'] : []),
-        ...(validIPs.length > 200 ? ['Large batch size may affect performance - consider splitting into smaller batches'] : [])
-      ],
+      dns_info: {
+        resolved: dnsResolutions,
+        errors: dnsErrors,
+        success_rate: validation.domains.length > 0 ? 
+          Math.round((Object.keys(dnsResolutions).length / validation.domains.length) * 100) + '%' : 'N/A'
+      },
+      validation_results: {
+        invalid: validation.invalid,
+        duplicates: validation.duplicates
+      },
+      performance_warnings: suggestions,
       request_id: requestId,
       timestamp: new Date().toISOString()
     };
+
+    console.log(`[${requestId}] 批量查询成功完成 - 总耗时: ${totalTime}ms, 处理数量: ${stats.processed}`);
     
-    console.log(`Batch lookup completed: ${validIPs.length} IPs in ${totalTime}ms (${Math.round(validIPs.length / (totalTime / 1000))} IPs/sec)`);
-    
-    // 🎯 关键修改：格式化JSON输出
-    const formattedJson = JSON.stringify(successResponse, null, 2);
-    res.status(200).end(formattedJson);
-    
+    const formattedJson = JSON.stringify(finalResponse, null, 2);
+    return res.status(200).end(formattedJson);
+
   } catch (error) {
-    console.error(`Batch lookup error:`, error);
+    console.error(`[${requestId}] 批量查询处理错误:`, error);
     
     const errorResponse = {
       success: false,
       error: 'Internal server error',
-      message: '批量查询处理失败，请稍后重试',
+      message: '批量查询处理时发生内部错误',
       request_id: requestId,
-      debug_info: {
-        error_type: error.name || 'Unknown',
-        error_message: error.message
+      debug: {
+        error_message: error.message,
+        error_stack: error.stack
       },
       stats: {
         response_time_ms: Date.now() - startTime,
         error_occurred: true
-      }
+      },
+      timestamp: new Date().toISOString()
     };
     
-    // 🎯 关键修改：错误响应也格式化JSON
     const formattedJson = JSON.stringify(errorResponse, null, 2);
-    res.status(500).end(formattedJson);
+    return res.status(500).end(formattedJson);
   }
 });
