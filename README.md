@@ -36,8 +36,8 @@
 
 ```bash
 # 克隆项目
-git clone https://github.com/your-username/geoip-api-vercel.git
-cd geoip-api-vercel
+git clone https://github.com/hafrey1/GeoIP-API.git
+cd GeoIP-API
 
 # 安装依赖
 npm install
@@ -203,7 +203,7 @@ curl -X POST "https://your-app.vercel.app/api/batch" \
 ### 📁 项目结构
 
 ```
-geoip-api-vercel/
+GeoIP-API/
 ├── api/                    # Serverless Functions
 │   ├── index.js           # 主页面和API信息
 │   ├── health.js          # 健康检查
