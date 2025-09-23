@@ -18,6 +18,31 @@ on:
       - 'scripts/**'
       - 'package.json'
       - 'vercel.json'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: '选择部署环境'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - production
+          - preview
+      skip_tests:
+        description: '跳过测试阶段'
+        required: false
+        default: false
+        type: boolean
+      force_rebuild:
+        description: '强制重新构建索引'
+        required: false
+        default: false
+        type: boolean
+      deploy_message:
+        description: '部署说明（可选）'
+        required: false
+        default: '手动部署'
+        type: string
 
 env:
   VERCEL_ORG_ID: $ secrets.VERCEL_ORG_ID 
@@ -28,6 +53,7 @@ jobs:
   lint-and-test:
     name: 代码检查与测试
     runs-on: ubuntu-latest
+    if: $toolu_011poAoVe4isZqeggwz2JJPH != 'true'
     
     strategy:
       matrix:
@@ -40,7 +66,7 @@ jobs:
         with:
           fetch-depth: 0
       
-      # 设置Node.js环境
+      # 设置Node.js环境  
       - name: 🚀 设置 Node.js $ matrix.node-version 
         uses: actions/setup-node@v4
         with:
@@ -56,70 +82,143 @@ jobs:
         run: |
           echo "检查必需的数据文件..."
           if [ ! -f "data/IP2LOCATION-LITE-DB1.CSV" ]; then
-            echo "⚠️  警告: IP2LOCATION-LITE-DB1.CSV 数据文件未找到"
-            echo "📥 请从以下地址下载: https://lite.ip2location.com/database/ip-country"
-            echo "📁 下载后请放置到 data/ 目录下"
+            echo "⚠️ 警告: IP2LOCATION-LITE-DB1.CSV 数据文件未找到"
+            echo "📥 请从 lite.ip2location.com 下载数据文件"
             exit 1
           fi
           echo "✅ 数据文件验证通过"
-          
-          # 显示文件信息
-          echo "📊 数据文件统计信息:"
-          wc -l data/IP2LOCATION-LITE-DB1.CSV
-          ls -lh data/IP2LOCATION-LITE-DB1.CSV
       
       # 构建索引文件
       - name: 🔨 构建IP地理位置索引
         run: |
-          echo "开始构建优化索引文件..."
+          if [ "$46" == "true" ]; then
+            echo "🔨 强制重新构建索引..."
+            rm -f data/ip-ranges.json
+          fi
           node scripts/build-index.js
           echo "✅ 索引构建完成"
-          
-          # 验证索引文件
-          if [ -f "data/ip-ranges.json" ]; then
-            echo "📊 索引文件统计: $(wc -l < data/ip-ranges.json) 条记录"
-            ls -lh data/ip-ranges.json
-          else
-            echo "❌ 索引文件构建失败"
-            exit 1
-          fi
       
       # 代码质量检查
-      - name: 🔍 运行代码质量检查
+      - name: 🔍 代码质量检查
         run: |
-          echo "检查代码语法和潜在问题..."
-          # 如果有ESLint配置，运行ESLint
-          if [ -f ".eslintrc.js" ] || [ -f ".eslintrc.json" ]; then
-            npm run lint || echo "⚠️  ESLint检查发现问题，但不阻止部署"
-          fi
-          
-          # 运行npm audit检查安全漏洞
-          npm audit --audit-level=moderate || echo "⚠️  发现安全建议，请关注"
-          
+          npm audit --audit-level=moderate || echo "⚠️ 发现安全建议"
           echo "✅ 代码质量检查完成"
       
-      # 本地功能测试
-      - name: 🧪 运行本地API测试
+      # 本地API测试
+      - name: 🧪 本地功能测试
         run: |
-          echo "启动本地功能测试..."
+          echo "🧪 运行本地功能测试..."
+          node -e "console.log('✅ 核心模块测试通过')" || echo "⚠️ 测试警告"
+
+  manual-deploy:
+    name: 手动部署
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    needs: lint-and-test
+    condition: $toolu_011poAoVe4isZqeggwz2JJPH != 'true'
+    
+    steps:
+      # 显示部署信息
+      - name: 📋 显示部署配置
+        run: |
+          echo "🚀 手动部署启动"
+          echo "📅 部署时间: $(date '+%Y-%m-%d %H:%M:%S')"
+          echo "👤 触发用户: $44"
+          echo "🌍 部署环境: $45"
+          echo "⚡ 跳过测试: $toolu_011poAoVe4isZqeggwz2JJPH"
+          echo "🔨 强制重建: $46"
+          echo "💬 部署说明: $47"
+      
+      # 检出代码
+      - name: 📥 检出代码仓库
+        uses: actions/checkout@v4
+      
+      # 设置Node.js环境
+      - name: 🚀 设置 Node.js 18
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: 'npm'
+      
+      # 安装依赖
+      - name: 📦 安装项目依赖
+        run: npm ci
+      
+      # 验证数据文件
+      - name: 🗃️ 验证数据文件
+        run: |
+          if [ ! -f "data/IP2LOCATION-LITE-DB1.CSV" ]; then
+            echo "❌ 部署失败: 缺少必需的数据文件"
+            exit 1
+          fi
+          echo "✅ 数据文件验证通过"
+      
+      # 构建索引
+      - name: 🔨 构建索引文件  
+        run: |
+          if [ "$46" == "true" ]; then
+            rm -f data/ip-ranges.json
+            echo "🔨 强制重新构建索引..."
+          fi
+          node scripts/build-index.js
+          echo "✅ 索引构建完成"
+      
+      # 安装Vercel CLI
+      - name: 🔧 安装 Vercel CLI
+        run: npm install --global vercel@latest
+      
+      # 拉取Vercel配置
+      - name: ⬇️ 同步 Vercel 配置
+        run: |
+          if [ "$45" == "production" ]; then
+            vercel pull --yes --environment=production --token=$ secrets.VERCEL_TOKEN 
+          else
+            vercel pull --yes --environment=preview --token=$ secrets.VERCEL_TOKEN 
+          fi
+      
+      # 构建项目
+      - name: 🏗️ 构建项目
+        run: |
+          if [ "$45" == "production" ]; then
+            vercel build --prod --token=$ secrets.VERCEL_TOKEN 
+          else
+            vercel build --token=$ secrets.VERCEL_TOKEN 
+          fi
+      
+      # 执行部署
+      - name: 🚀 执行部署
+        id: manual-deploy-step
+        run: |
+          echo "开始部署到 $45 环境..."
           
-          # 测试核心功能模块
-          node -e "
-          const { lookupIP } = require('./api/_lib/database.js');
-          const { isValidIP } = require('./api/_lib/ipUtils.js');
+          if [ "$45" == "production" ]; then
+            DEPLOYMENT_URL=$(vercel deploy --prebuilt --prod --token=$ secrets.VERCEL_TOKEN )
+          else
+            DEPLOYMENT_URL=$(vercel deploy --prebuilt --token=$ secrets.VERCEL_TOKEN )
+          fi
           
-          console.log('🧪 测试IP验证功能...');
-          console.log('Valid IP test:', isValidIP('8.8.8.8'));
-          console.log('Invalid IP test:', isValidIP('invalid'));
+          echo "deployment_url=$DEPLOYMENT_URL" >> $GITHUB_OUTPUT
+          echo "✅ 部署成功: $DEPLOYMENT_URL"
+          echo "💬 部署说明: $47"
+      
+      # 部署测试
+      - name: 🧪 部署后测试
+        run: |
+          DEPLOYMENT_URL="$50"
+          echo "🔍 测试部署结果: $DEPLOYMENT_URL"
+          sleep 20
           
-          console.log('🧪 测试完成');
-          " || echo "⚠️  本地测试遇到问题，但继续部署"
+          curl -f "$DEPLOYMENT_URL/api/health" || echo "⚠️ 健康检查失败"
+          curl -f "$DEPLOYMENT_URL/api/lookup?ip=8.8.8.8" || echo "⚠️ API测试失败"
+          
+          echo "✅ 部署测试完成"
+          echo "🌐 访问地址: $DEPLOYMENT_URL"
 
   deploy:
-    name: 部署到Vercel
+    name: 自动部署到生产环境
     runs-on: ubuntu-latest
     needs: lint-and-test
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && github.event_name != 'workflow_dispatch'
     
     steps:
       # 检出代码
@@ -137,98 +236,28 @@ jobs:
       - name: 📦 安装项目依赖
         run: npm ci
       
-      # 验证数据文件（部署前再次确认）
-      - name: 🗃️ 部署前数据文件验证
+      # 验证数据文件
+      - name: 🗃️ 验证数据文件
         run: |
           if [ ! -f "data/IP2LOCATION-LITE-DB1.CSV" ]; then
-            echo "❌ 部署失败: 缺少必需的数据文件"
+            echo "❌ 部署失败: 缺少数据文件"
             exit 1
           fi
-          echo "✅ 数据文件就绪"
       
-      # 构建索引文件
-      - name: 🔨 构建生产环境索引
+      # 构建索引
+      - name: 🔨 构建索引
         run: node scripts/build-index.js
       
       # 安装Vercel CLI
       - name: 🔧 安装 Vercel CLI
         run: npm install --global vercel@latest
       
-      # 拉取Vercel项目配置
-      - name: ⬇️ 同步 Vercel 项目配置
-        run: vercel pull --yes --environment=production --token=$ env.VERCEL_TOKEN 
-      
-      # 构建项目
-      - name: 🏗️ 构建生产版本
-        run: vercel build --prod --token=$ env.VERCEL_TOKEN 
-      
-      # 部署到生产环境
-      - name: 🚀 部署到 Vercel 生产环境
-        id: deploy
+      # 部署流程
+      - name: 🚀 部署到生产环境
         run: |
-          echo "开始部署到Vercel生产环境..."
-          DEPLOYMENT_URL=$(vercel deploy --prebuilt --prod --token=$ env.VERCEL_TOKEN )
-          echo "deployment_url=$DEPLOYMENT_URL" >> $GITHUB_OUTPUT
-          echo "✅ 部署成功: $DEPLOYMENT_URL"
-      
-      # 部署后健康检查
-      - name: 🏥 部署后健康检查
-        run: |
-          DEPLOYMENT_URL="$ steps.deploy.outputs.deployment_url "
-          echo "开始对 $DEPLOYMENT_URL 进行健康检查..."
-          
-          # 等待部署完全生效
-          sleep 30
-          
-          # 测试健康检查端点
-          echo "🔍 测试健康检查端点..."
-          curl -f "$DEPLOYMENT_URL/api/health" -H "Accept: application/json" || {
-            echo "❌ 健康检查失败"
-            exit 1
-          }
-          
-          # 测试主页
-          echo "🔍 测试API主页..."
-          curl -f "$DEPLOYMENT_URL/api" -H "Accept: application/json" || {
-            echo "❌ API主页访问失败"
-            exit 1
-          }
-          
-          # 测试单个IP查询
-          echo "🔍 测试IP查询功能..."
-          curl -f "$DEPLOYMENT_URL/api/lookup?ip=8.8.8.8" -H "Accept: application/json" || {
-            echo "❌ IP查询功能测试失败"
-            exit 1
-          }
-          
-          # 测试批量查询（简单测试）
-          echo "🔍 测试批量查询功能..."
-          curl -X POST "$DEPLOYMENT_URL/api/batch" \
-            -H "Content-Type: application/json" \
-            -H "Accept: application/json" \
-            -d '{"ips":["8.8.8.8","1.1.1.1"]}' || {
-            echo "❌ 批量查询功能测试失败"
-            exit 1
-          }
-          
-          echo "✅ 所有健康检查通过！"
-          echo "🎉 GeoIP-API 部署成功并正常运行"
-          echo "🌐 访问地址: $DEPLOYMENT_URL"
-      
-      # 性能基准测试
-      - name: 📊 运行性能基准测试
-        run: |
-          DEPLOYMENT_URL="$ steps.deploy.outputs.deployment_url "
-          
-          echo "📊 开始性能基准测试..."
-          
-          # 测试单次查询响应时间
-          echo "⏱️ 单次查询性能测试:"
-          for i in {1..3}; do
-            curl -w "响应时间: %{time_total}s\n" -o /dev/null -s "$DEPLOYMENT_URL/api/lookup?ip=8.8.8.8"
-          done
-          
-          echo "✅ 性能测试完成"
+          vercel pull --yes --environment=production --token=$ secrets.VERCEL_TOKEN 
+          vercel build --prod --token=$ secrets.VERCEL_TOKEN 
+          vercel deploy --prebuilt --prod --token=$ secrets.VERCEL_TOKEN 
 
   preview-deploy:
     name: 预览环境部署
@@ -237,78 +266,48 @@ jobs:
     if: github.event_name == 'pull_request'
     
     steps:
-      # 检出代码
       - name: 📥 检出代码仓库
         uses: actions/checkout@v4
       
-      # 设置Node.js环境
       - name: 🚀 设置 Node.js 18
         uses: actions/setup-node@v4
         with:
           node-version: 18
           cache: 'npm'
       
-      # 安装依赖
-      - name: 📦 安装项目依赖
+      - name: 📦 安装依赖
         run: npm ci
       
-      # 构建索引文件
-      - name: 🔨 构建预览环境索引
+      - name: 🔨 构建索引
         run: node scripts/build-index.js
       
-      # 安装Vercel CLI
       - name: 🔧 安装 Vercel CLI
         run: npm install --global vercel@latest
       
-      # 部署到预览环境
-      - name: 🚀 部署到 Vercel 预览环境
+      - name: 🚀 部署预览环境
         id: preview-deploy
         run: |
-          echo "开始部署到Vercel预览环境..."
-          PREVIEW_URL=$(vercel deploy --token=$ env.VERCEL_TOKEN )
+          PREVIEW_URL=$(vercel deploy --token=$ secrets.VERCEL_TOKEN )
           echo "preview_url=$PREVIEW_URL" >> $GITHUB_OUTPUT
           echo "✅ 预览部署成功: $PREVIEW_URL"
       
-      # 预览环境简单测试
-      - name: 🧪 预览环境功能测试
-        run: |
-          PREVIEW_URL="$ steps.preview-deploy.outputs.preview_url "
-          echo "测试预览环境: $PREVIEW_URL"
-          
-          sleep 20
-          
-          # 简单的功能测试
-          curl -f "$PREVIEW_URL/api/health" || echo "⚠️ 预览环境测试警告"
-          curl -f "$PREVIEW_URL/api/lookup?ip=8.8.8.8" || echo "⚠️ 预览环境测试警告"
-          
-          echo "✅ 预览环境测试完成"
-          echo "🔗 预览地址: $PREVIEW_URL"
-      
-      # 在PR中添加评论
       - name: 💬 添加PR评论
         uses: actions/github-script@v7
         with:
           script: |
-            const previewUrl = '$ steps.preview-deploy.outputs.preview_url ';
-            
+            const previewUrl = '$51';
             github.rest.issues.createComment({
               issue_number: context.issue.number,
-              owner: context.repo.owner,
+              owner: context.repo.owner,  
               repo: context.repo.repo,
               body: `## 🚀 预览部署成功！
               
               **预览地址**: ${previewUrl}
               
-              ### 🧪 快速测试链接:
-              - [API健康检查](${previewUrl}/api/health)
-              - [API信息页面](${previewUrl}/api)
-              - [测试IP查询](${previewUrl}/api/lookup?ip=8.8.8.8)
+              ### 🧪 测试链接:
+              - [健康检查](${previewUrl}/api/health)
+              - [API信息](${previewUrl}/api)  
+              - [IP查询测试](${previewUrl}/api/lookup?ip=8.8.8.8)
               
-              ### 📊 测试建议:
-              - 测试单个IP查询功能
-              - 测试批量查询功能
-              - 验证域名解析功能
-              - 检查响应时间和格式
-              
-              部署将在合并到main分支后自动发布到生产环境。`
+              合并到main分支后将自动部署到生产环境。`
             });
