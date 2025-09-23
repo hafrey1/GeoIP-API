@@ -10,8 +10,8 @@ on:
       - 'vercel.json'
 
 env:
-  VERCEL_ORG_ID: $ secrets.VERCEL_ORG_ID 
-  VERCEL_PROJECT_ID: $ secrets.VERCEL_PROJECT_ID 
+  VERCEL_ORG_ID: $69
+  VERCEL_PROJECT_ID: $70 
 
 jobs:
   deploy:
@@ -47,9 +47,9 @@ jobs:
       
       - name: 部署到 Vercel
         run: |
-          vercel pull --yes --environment=production --token=$secrets.VERCEL_TOKEN
-          vercel build --prod --token=$secrets.VERCEL_TOKEN
-          vercel deploy --prebuilt --prod --token=$secrets.VERCEL_TOKEN
+          vercel pull --yes --environment=production --token=$71
+          vercel build --prod --token=$71
+          vercel deploy --prebuilt --prod --token=$71
         env:
-          VERCEL_ORG_ID: $ secrets.VERCEL_ORG_ID 
-          VERCEL_PROJECT_ID: $ secrets.VERCEL_PROJECT_ID 
+          VERCEL_ORG_ID: $69
+          VERCEL_PROJECT_ID: $70 
