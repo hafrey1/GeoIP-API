@@ -8,6 +8,13 @@ on:
       - 'data/**'
       - 'package.json'
       - 'vercel.json'
+  workflow_dispatch:
+    inputs:
+      deploy_message:
+        description: '部署说明（可选）'
+        required: false
+        default: '手动部署'
+        type: string
 
 env:
   VERCEL_ORG_ID: $69
@@ -19,6 +26,14 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
+      - name: 显示部署信息
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          echo "🚀 手动部署启动"
+          echo "📅 部署时间: $(date '+%Y-%m-%d %H:%M:%S')"
+          echo "👤 触发用户: $72"
+          echo "💬 部署说明: $73"
+      
       - name: 检出代码
         uses: actions/checkout@v4
       
