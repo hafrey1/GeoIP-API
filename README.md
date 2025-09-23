@@ -1,8 +1,9 @@
 # GeoIP-API Vercel版
 
 > 支持一键部署到Vercel 的高性能IP地理位置查询API服务，使用的 IP2Location LITE提供的免费数据库IP2LOCATION-LITE-DB1.CSV，支持IP地址和域名查询，支持IP地址和域名混合批量查询!
+>
+> 点击下方按钮一键部署
 > 
-
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/your-username/geoip-api-vercel)
 
 ## ✨ 特性
