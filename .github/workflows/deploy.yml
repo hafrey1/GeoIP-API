@@ -58,12 +58,3 @@ jobs:
       
       - name: 安装 Vercel CLI
         run: npm install --global vercel@latest
-      
-      - name: 部署到 Vercel
-        run: |
-          vercel pull --yes --environment=production --token=$71
-          vercel build --prod --token=$71
-          vercel deploy --prebuilt --prod --token=$71
-        env:
-          VERCEL_ORG_ID: $69
-          VERCEL_PROJECT_ID: $70 
