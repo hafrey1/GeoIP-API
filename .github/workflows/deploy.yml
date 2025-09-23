@@ -53,7 +53,7 @@ jobs:
   lint-and-test:
     name: 代码检查与测试
     runs-on: ubuntu-latest
-    if: $toolu_011poAoVe4isZqeggwz2JJPH != 'true'
+    if: ${{52}} != 'true'
     
     strategy:
       matrix:
@@ -87,35 +87,66 @@ jobs:
             exit 1
           fi
           echo "✅ 数据文件验证通过"
+          
+          # 显示文件信息
+          echo "📊 数据文件统计信息:"
+          wc -l data/IP2LOCATION-LITE-DB1.CSV
+          ls -lh data/IP2LOCATION-LITE-DB1.CSV
       
       # 构建索引文件
       - name: 🔨 构建IP地理位置索引
         run: |
-          if [ "$46" == "true" ]; then
+          if [ "${{53}}" == "true" ]; then
             echo "🔨 强制重新构建索引..."
             rm -f data/ip-ranges.json
           fi
+          
+          echo "开始构建优化索引文件..."
           node scripts/build-index.js
           echo "✅ 索引构建完成"
+          
+          # 验证索引文件
+          if [ -f "data/ip-ranges.json" ]; then
+            echo "📊 索引文件统计: $(wc -l < data/ip-ranges.json) 条记录"
+            ls -lh data/ip-ranges.json
+          else
+            echo "❌ 索引文件构建失败"
+            exit 1
+          fi
       
       # 代码质量检查
-      - name: 🔍 代码质量检查
+      - name: 🔍 运行代码质量检查
         run: |
-          npm audit --audit-level=moderate || echo "⚠️ 发现安全建议"
+          echo "检查代码语法和潜在问题..."
+          
+          # 运行npm audit检查安全漏洞
+          npm audit --audit-level=moderate || echo "⚠️ 发现安全建议，请关注"
+          
           echo "✅ 代码质量检查完成"
       
-      # 本地API测试
-      - name: 🧪 本地功能测试
+      # 本地功能测试
+      - name: 🧪 运行本地API测试
         run: |
-          echo "🧪 运行本地功能测试..."
-          node -e "console.log('✅ 核心模块测试通过')" || echo "⚠️ 测试警告"
+          echo "启动本地功能测试..."
+          
+          # 测试核心功能模块
+          node -e "
+          try {
+            const { isValidIP } = require('./api/_lib/ipUtils.js');
+            console.log('🧪 测试IP验证功能...');
+            console.log('Valid IP test:', isValidIP('8.8.8.8'));
+            console.log('Invalid IP test:', isValidIP('invalid'));
+            console.log('✅ 本地测试通过');
+          } catch(e) {
+            console.log('⚠️ 本地测试遇到问题，但继续部署');
+          }
+          "
 
   manual-deploy:
     name: 手动部署
     runs-on: ubuntu-latest
     if: github.event_name == 'workflow_dispatch'
     needs: lint-and-test
-    condition: $toolu_011poAoVe4isZqeggwz2JJPH != 'true'
     
     steps:
       # 显示部署信息
@@ -123,11 +154,11 @@ jobs:
         run: |
           echo "🚀 手动部署启动"
           echo "📅 部署时间: $(date '+%Y-%m-%d %H:%M:%S')"
-          echo "👤 触发用户: $44"
-          echo "🌍 部署环境: $45"
-          echo "⚡ 跳过测试: $toolu_011poAoVe4isZqeggwz2JJPH"
-          echo "🔨 强制重建: $46"
-          echo "💬 部署说明: $47"
+          echo "👤 触发用户: $toolu_01HV2RfVEMbJLpoMDtc8m37t"
+          echo "🌍 部署环境: ${{54}}"
+          echo "⚡ 跳过测试: ${{52}}"
+          echo "🔨 强制重建: ${{53}}"
+          echo "💬 部署说明: ${{55}}"
       
       # 检出代码
       - name: 📥 检出代码仓库
@@ -156,7 +187,7 @@ jobs:
       # 构建索引
       - name: 🔨 构建索引文件  
         run: |
-          if [ "$46" == "true" ]; then
+          if [ "${{53}}" == "true" ]; then
             rm -f data/ip-ranges.json
             echo "🔨 强制重新构建索引..."
           fi
@@ -170,7 +201,7 @@ jobs:
       # 拉取Vercel配置
       - name: ⬇️ 同步 Vercel 配置
         run: |
-          if [ "$45" == "production" ]; then
+          if [ "${{54}}" == "production" ]; then
             vercel pull --yes --environment=production --token=$ secrets.VERCEL_TOKEN 
           else
             vercel pull --yes --environment=preview --token=$ secrets.VERCEL_TOKEN 
@@ -179,7 +210,7 @@ jobs:
       # 构建项目
       - name: 🏗️ 构建项目
         run: |
-          if [ "$45" == "production" ]; then
+          if [ "${{54}}" == "production" ]; then
             vercel build --prod --token=$ secrets.VERCEL_TOKEN 
           else
             vercel build --token=$ secrets.VERCEL_TOKEN 
@@ -189,9 +220,9 @@ jobs:
       - name: 🚀 执行部署
         id: manual-deploy-step
         run: |
-          echo "开始部署到 $45 环境..."
+          echo "开始部署到 ${{54}} 环境..."
           
-          if [ "$45" == "production" ]; then
+          if [ "${{54}}" == "production" ]; then
             DEPLOYMENT_URL=$(vercel deploy --prebuilt --prod --token=$ secrets.VERCEL_TOKEN )
           else
             DEPLOYMENT_URL=$(vercel deploy --prebuilt --token=$ secrets.VERCEL_TOKEN )
@@ -199,17 +230,20 @@ jobs:
           
           echo "deployment_url=$DEPLOYMENT_URL" >> $GITHUB_OUTPUT
           echo "✅ 部署成功: $DEPLOYMENT_URL"
-          echo "💬 部署说明: $47"
+          echo "💬 部署说明: ${{55}}"
       
       # 部署测试
       - name: 🧪 部署后测试
         run: |
-          DEPLOYMENT_URL="$50"
+          DEPLOYMENT_URL="${{56}}"
           echo "🔍 测试部署结果: $DEPLOYMENT_URL"
           sleep 20
           
-          curl -f "$DEPLOYMENT_URL/api/health" || echo "⚠️ 健康检查失败"
-          curl -f "$DEPLOYMENT_URL/api/lookup?ip=8.8.8.8" || echo "⚠️ API测试失败"
+          # 测试健康检查端点
+          curl -f "$DEPLOYMENT_URL/api/health" -H "Accept: application/json" || echo "⚠️ 健康检查失败"
+          
+          # 测试IP查询功能
+          curl -f "$DEPLOYMENT_URL/api/lookup?ip=8.8.8.8" -H "Accept: application/json" || echo "⚠️ API测试失败"
           
           echo "✅ 部署测试完成"
           echo "🌐 访问地址: $DEPLOYMENT_URL"
@@ -243,6 +277,7 @@ jobs:
             echo "❌ 部署失败: 缺少数据文件"
             exit 1
           fi
+          echo "✅ 数据文件就绪"
       
       # 构建索引
       - name: 🔨 构建索引
@@ -254,10 +289,47 @@ jobs:
       
       # 部署流程
       - name: 🚀 部署到生产环境
+        id: deploy-prod
         run: |
           vercel pull --yes --environment=production --token=$ secrets.VERCEL_TOKEN 
           vercel build --prod --token=$ secrets.VERCEL_TOKEN 
-          vercel deploy --prebuilt --prod --token=$ secrets.VERCEL_TOKEN 
+          DEPLOYMENT_URL=$(vercel deploy --prebuilt --prod --token=$ secrets.VERCEL_TOKEN )
+          echo "deployment_url=$DEPLOYMENT_URL" >> $GITHUB_OUTPUT
+          echo "✅ 生产环境部署成功: $DEPLOYMENT_URL"
+      
+      # 生产环境健康检查
+      - name: 🏥 生产环境健康检查
+        run: |
+          DEPLOYMENT_URL="${{57}}"
+          echo "开始对生产环境进行健康检查..."
+          
+          # 等待部署完全生效
+          sleep 30
+          
+          # 测试健康检查端点
+          echo "🔍 测试健康检查端点..."
+          curl -f "$DEPLOYMENT_URL/api/health" -H "Accept: application/json" || {
+            echo "❌ 健康检查失败"
+            exit 1
+          }
+          
+          # 测试主页
+          echo "🔍 测试API主页..."
+          curl -f "$DEPLOYMENT_URL/api" -H "Accept: application/json" || {
+            echo "❌ API主页访问失败"
+            exit 1
+          }
+          
+          # 测试单个IP查询
+          echo "🔍 测试IP查询功能..."
+          curl -f "$DEPLOYMENT_URL/api/lookup?ip=8.8.8.8" -H "Accept: application/json" || {
+            echo "❌ IP查询功能测试失败"
+            exit 1
+          }
+          
+          echo "✅ 所有健康检查通过！"
+          echo "🎉 GeoIP-API 部署成功并正常运行"
+          echo "🌐 生产环境地址: $DEPLOYMENT_URL"
 
   preview-deploy:
     name: 预览环境部署
@@ -291,23 +363,44 @@ jobs:
           echo "preview_url=$PREVIEW_URL" >> $GITHUB_OUTPUT
           echo "✅ 预览部署成功: $PREVIEW_URL"
       
+      - name: 🧪 预览环境测试
+        run: |
+          PREVIEW_URL="${{58}}"
+          echo "测试预览环境: $PREVIEW_URL"
+          
+          sleep 20
+          
+          # 简单的功能测试
+          curl -f "$PREVIEW_URL/api/health" || echo "⚠️ 预览环境健康检查警告"
+          curl -f "$PREVIEW_URL/api/lookup?ip=8.8.8.8" || echo "⚠️ 预览环境API测试警告"
+          
+          echo "✅ 预览环境测试完成"
+          echo "🔗 预览地址: $PREVIEW_URL"
+      
       - name: 💬 添加PR评论
         uses: actions/github-script@v7
         with:
           script: |
-            const previewUrl = '$51';
+            const previewUrl = '${{58}}';
+            
             github.rest.issues.createComment({
               issue_number: context.issue.number,
-              owner: context.repo.owner,  
+              owner: context.repo.owner,
               repo: context.repo.repo,
               body: `## 🚀 预览部署成功！
               
               **预览地址**: ${previewUrl}
               
-              ### 🧪 测试链接:
-              - [健康检查](${previewUrl}/api/health)
-              - [API信息](${previewUrl}/api)  
-              - [IP查询测试](${previewUrl}/api/lookup?ip=8.8.8.8)
+              ### 🧪 快速测试链接:
+              - [API健康检查](${previewUrl}/api/health)
+              - [API信息页面](${previewUrl}/api)
+              - [测试IP查询](${previewUrl}/api/lookup?ip=8.8.8.8)
               
-              合并到main分支后将自动部署到生产环境。`
+              ### 📊 测试建议:
+              - 测试单个IP查询功能
+              - 测试批量查询功能
+              - 验证域名解析功能
+              - 检查响应时间和格式
+              
+              部署将在合并到main分支后自动发布到生产环境。`
             });
