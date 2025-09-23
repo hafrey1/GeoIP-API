@@ -20,8 +20,8 @@ on:
       - 'vercel.json'
 
 env:
-  VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-  VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+  VERCEL_ORG_ID: $ secrets.VERCEL_ORG_ID 
+  VERCEL_PROJECT_ID: $ secrets.VERCEL_PROJECT_ID 
 
 jobs:
   build-and-deploy:
@@ -39,10 +39,10 @@ jobs:
           fetch-depth: 0
       
       # 设置Node.js环境
-      - name: Setup Node.js ${{ matrix.node-version }}
+      - name: Setup Node.js $ matrix.node-version 
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.node-version }}
+          node-version: $ matrix.node-version 
           cache: 'npm'
       
       # 安装依赖
@@ -75,17 +75,17 @@ jobs:
       
       # Pull Vercel环境信息
       - name: Pull Vercel Environment Information
-        run: vercel pull --yes --environment=preview --token=${{ secrets.VERCEL_TOKEN }}
+        run: vercel pull --yes --environment=preview --token=$ secrets.VERCEL_TOKEN 
       
       # 构建项目
       - name: Build Project Artifacts
-        run: vercel build --token=${{ secrets.VERCEL_TOKEN }}
+        run: vercel build --token=$ secrets.VERCEL_TOKEN 
       
       # 部署到Preview环境 (Pull Request)
       - name: Deploy to Preview
         if: github.event_name == 'pull_request'
         run: |
-          url=$(vercel deploy --prebuilt --token=${{ secrets.VERCEL_TOKEN }})
+          url=$(vercel deploy --prebuilt --token=$ secrets.VERCEL_TOKEN )
           echo "PREVIEW_URL=$url" >> $GITHUB_ENV
           echo "### 🚀 Preview Deployment" >> $GITHUB_STEP_SUMMARY
           echo "Preview URL: $url" >> $GITHUB_STEP_SUMMARY
@@ -94,7 +94,7 @@ jobs:
       - name: Deploy to Production
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         run: |
-          url=$(vercel deploy --prod --prebuilt --token=${{ secrets.VERCEL_TOKEN }})
+          url=$(vercel deploy --prod --prebuilt --token=$ secrets.VERCEL_TOKEN )
           echo "PRODUCTION_URL=$url" >> $GITHUB_ENV
           echo "### ✅ Production Deployment" >> $GITHUB_STEP_SUMMARY
           echo "Production URL: $url" >> $GITHUB_STEP_SUMMARY
