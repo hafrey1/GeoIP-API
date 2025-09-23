@@ -255,7 +255,7 @@ module.exports = trackPerformance('index', async (req, res) => {
     links: {
       documentation: 'your-api-domain/api/index',
       health_check: 'your-api-domain/api/health',
-      github_repository: 'https://github.com/your-username/geoip-api-vercel',
+      github_repository: 'https://github.com/hafrey1/GeoIP-API',
       vercel_platform: 'https://vercel.com',
       data_source: 'https://lite.ip2location.com'
     },
