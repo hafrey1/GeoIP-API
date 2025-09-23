@@ -45,15 +45,15 @@ on:
         type: string
 
 env:
-  VERCEL_ORG_ID: $ secrets.VERCEL_ORG_ID 
-  VERCEL_PROJECT_ID: $ secrets.VERCEL_PROJECT_ID 
-  VERCEL_TOKEN: $ secrets.VERCEL_TOKEN 
+  VERCEL_ORG_ID: $secrets.VERCEL_ORG_ID
+  VERCEL_PROJECT_ID: $secrets.VERCEL_PROJECT_ID
+  VERCEL_TOKEN: $secrets.VERCEL_TOKEN
 
 jobs:
   lint-and-test:
     name: 代码检查与测试
     runs-on: ubuntu-latest
-    if: ${{52}} != 'true'
+    if: $61 != 'true'
     
     strategy:
       matrix:
@@ -67,10 +67,10 @@ jobs:
           fetch-depth: 0
       
       # 设置Node.js环境  
-      - name: 🚀 设置 Node.js $ matrix.node-version 
+      - name: 🚀 设置 Node.js $60
         uses: actions/setup-node@v4
         with:
-          node-version: $ matrix.node-version 
+          node-version: $60
           cache: 'npm'
       
       # 安装依赖
@@ -96,7 +96,7 @@ jobs:
       # 构建索引文件
       - name: 🔨 构建IP地理位置索引
         run: |
-          if [ "${{53}}" == "true" ]; then
+          if [ "$62" == "true" ]; then
             echo "🔨 强制重新构建索引..."
             rm -f data/ip-ranges.json
           fi
@@ -154,11 +154,11 @@ jobs:
         run: |
           echo "🚀 手动部署启动"
           echo "📅 部署时间: $(date '+%Y-%m-%d %H:%M:%S')"
-          echo "👤 触发用户: $toolu_01HV2RfVEMbJLpoMDtc8m37t"
-          echo "🌍 部署环境: ${{54}}"
-          echo "⚡ 跳过测试: ${{52}}"
-          echo "🔨 强制重建: ${{53}}"
-          echo "💬 部署说明: ${{55}}"
+          echo "👤 触发用户: $63"
+          echo "🌍 部署环境: $64"
+          echo "⚡ 跳过测试: $61"
+          echo "🔨 强制重建: $62"
+          echo "💬 部署说明: $65"
       
       # 检出代码
       - name: 📥 检出代码仓库
@@ -187,7 +187,7 @@ jobs:
       # 构建索引
       - name: 🔨 构建索引文件  
         run: |
-          if [ "${{53}}" == "true" ]; then
+          if [ "$62" == "true" ]; then
             rm -f data/ip-ranges.json
             echo "🔨 强制重新构建索引..."
           fi
@@ -201,41 +201,41 @@ jobs:
       # 拉取Vercel配置
       - name: ⬇️ 同步 Vercel 配置
         run: |
-          if [ "${{54}}" == "production" ]; then
-            vercel pull --yes --environment=production --token=$ secrets.VERCEL_TOKEN 
+          if [ "$64" == "production" ]; then
+            vercel pull --yes --environment=production --token=$secrets.VERCEL_TOKEN
           else
-            vercel pull --yes --environment=preview --token=$ secrets.VERCEL_TOKEN 
+            vercel pull --yes --environment=preview --token=$secrets.VERCEL_TOKEN
           fi
       
       # 构建项目
       - name: 🏗️ 构建项目
         run: |
-          if [ "${{54}}" == "production" ]; then
-            vercel build --prod --token=$ secrets.VERCEL_TOKEN 
+          if [ "$64" == "production" ]; then
+            vercel build --prod --token=$secrets.VERCEL_TOKEN
           else
-            vercel build --token=$ secrets.VERCEL_TOKEN 
+            vercel build --token=$secrets.VERCEL_TOKEN
           fi
       
       # 执行部署
       - name: 🚀 执行部署
         id: manual-deploy-step
         run: |
-          echo "开始部署到 ${{54}} 环境..."
+          echo "开始部署到 $64 环境..."
           
-          if [ "${{54}}" == "production" ]; then
-            DEPLOYMENT_URL=$(vercel deploy --prebuilt --prod --token=$ secrets.VERCEL_TOKEN )
+          if [ "$64" == "production" ]; then
+            DEPLOYMENT_URL=$(vercel deploy --prebuilt --prod --token=$secrets.VERCEL_TOKEN)
           else
-            DEPLOYMENT_URL=$(vercel deploy --prebuilt --token=$ secrets.VERCEL_TOKEN )
+            DEPLOYMENT_URL=$(vercel deploy --prebuilt --token=$secrets.VERCEL_TOKEN)
           fi
           
           echo "deployment_url=$DEPLOYMENT_URL" >> $GITHUB_OUTPUT
           echo "✅ 部署成功: $DEPLOYMENT_URL"
-          echo "💬 部署说明: ${{55}}"
+          echo "💬 部署说明: $65"
       
       # 部署测试
       - name: 🧪 部署后测试
         run: |
-          DEPLOYMENT_URL="${{56}}"
+          DEPLOYMENT_URL="$66"
           echo "🔍 测试部署结果: $DEPLOYMENT_URL"
           sleep 20
           
@@ -291,16 +291,16 @@ jobs:
       - name: 🚀 部署到生产环境
         id: deploy-prod
         run: |
-          vercel pull --yes --environment=production --token=$ secrets.VERCEL_TOKEN 
-          vercel build --prod --token=$ secrets.VERCEL_TOKEN 
-          DEPLOYMENT_URL=$(vercel deploy --prebuilt --prod --token=$ secrets.VERCEL_TOKEN )
+          vercel pull --yes --environment=production --token=$secrets.VERCEL_TOKEN
+          vercel build --prod --token=$secrets.VERCEL_TOKEN
+          DEPLOYMENT_URL=$(vercel deploy --prebuilt --prod --token=$secrets.VERCEL_TOKEN)
           echo "deployment_url=$DEPLOYMENT_URL" >> $GITHUB_OUTPUT
           echo "✅ 生产环境部署成功: $DEPLOYMENT_URL"
       
       # 生产环境健康检查
       - name: 🏥 生产环境健康检查
         run: |
-          DEPLOYMENT_URL="${{57}}"
+          DEPLOYMENT_URL="$67"
           echo "开始对生产环境进行健康检查..."
           
           # 等待部署完全生效
@@ -359,13 +359,13 @@ jobs:
       - name: 🚀 部署预览环境
         id: preview-deploy
         run: |
-          PREVIEW_URL=$(vercel deploy --token=$ secrets.VERCEL_TOKEN )
+          PREVIEW_URL=$(vercel deploy --token=$secrets.VERCEL_TOKEN)
           echo "preview_url=$PREVIEW_URL" >> $GITHUB_OUTPUT
           echo "✅ 预览部署成功: $PREVIEW_URL"
       
       - name: 🧪 预览环境测试
         run: |
-          PREVIEW_URL="${{58}}"
+          PREVIEW_URL="$68"
           echo "测试预览环境: $PREVIEW_URL"
           
           sleep 20
@@ -381,7 +381,7 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const previewUrl = '${{58}}';
+            const previewUrl = '$68';
             
             github.rest.issues.createComment({
               issue_number: context.issue.number,
